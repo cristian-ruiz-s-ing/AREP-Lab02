@@ -25,36 +25,88 @@ class ClientHandler extends Thread {
 
     @Override
     public void run() {
+        BufferedReader in = null;
         try {
-            BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-            OutputStream out = clientSocket.getOutputStream();
+            in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        OutputStream out = null;
+        try {
+            out = clientSocket.getOutputStream();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
 
-            String request = in.readLine();
-            String filePath = null;//getRequestFilePath(request);
+        String request = null;
+        try {
+            request = in.readLine();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        String filePath = getRequestFilePath(request);
 
-            if (filePath != null) {
-                File file = new File(filePath);
-                if (file.exists() && file.isFile()) {
-                    byte[] fileData = null;//readFileData(file);
-                    out.write(fileData);
+        if (filePath != null) {
+            File file = new File(filePath);
+            if (file.exists() && file.isFile()) {
+                // Verifica que la solicitud sea una solicitud GET y contiene "/api/archivos/"
+                if (request.startsWith("GET /api/archivos/")) {
+                    try (BufferedReader fileReader = new BufferedReader(new FileReader(file))) {
+                        StringBuilder fileContent = new StringBuilder();
+                        String line;
+                        while ((line = fileReader.readLine()) != null) {
+                            fileContent.append(line);
+                        }
+                        String response = "HTTP/1.1 200 OK\r\n\r\n" + fileContent.toString();
+                        out.write(response.getBytes());
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                } else {
+                    // Manejar otros tipos de solicitudes (por ejemplo, servir archivos estáticos)
+                    byte[] fileData = new byte[0];
+                    try {
+                        fileData = readFileData(file);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                    try {
+                        out.write(fileData);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
                 }
             }
-
-            out.close();
-            in.close();
-            clientSocket.close();
-        } catch (IOException e) {
-            e.printStackTrace();
         }
     }
 
-    //private String getRequestFilePath(String request) {
-        // Parse the HTTP request and extract the requested file path
-        // Return the appropriate local file path based on the request
-    //}
+    private String getRequestFilePath(String request) {
+        try {
+            String[] parts = request.split(" ");
+            String requestMethod = parts[0];
+            String requestPath = parts[1];
 
-    //private byte[] readFileData(File file) throws IOException {
-        // Read the content of the file into a byte array
-        // Return the byte array
-    //}
+            String baseDirectory = "C:/Documentos/";
+            String filePath = baseDirectory + requestPath;
+
+            if (filePath.startsWith(baseDirectory) && new File(filePath).exists()){
+                return filePath;
+            }
+        } catch (Exception e){
+            e.printStackTrace();
+        }
+        return  null;
+    }
+
+    private byte[] readFileData(File file) throws IOException {
+        byte[] data = null;
+        try (FileInputStream fileInputStream = new FileInputStream(file)){
+            data = new byte[(int) file.length()];
+            fileInputStream.read(data);
+
+        }catch (IOException e){
+            e.printStackTrace();
+        }
+        return data;
+    }
 }
